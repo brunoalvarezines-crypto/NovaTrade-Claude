@@ -1,18 +1,16 @@
 const fs = require('fs');
 const path = require('path');
+const { SYMBOLS } = require('./precio');
 
 const DIR = path.join(__dirname, '..', 'data', 'capturas');
-// Símbolo en formato TradingView (EXCHANGE:PAR). Por defecto deriva del
-// mismo símbolo que usa el feed de precio, asumiendo Binance.
-const SYMBOL = process.env.TV_SYMBOL || `BINANCE:${process.env.PRICE_SYMBOL || 'BTCUSDT'}`;
 const CADA_MS = Number(process.env.CAPTURAS_INTERVAL_MS) || 5 * 60 * 1000; // 5 min
 
 // Nombre de archivo (estilo TradingView) -> intervalo del widget.
 const INTERVALOS = { '1D': 'D', '1H': '60', '15m': '15' };
 
 // playwright es dependencia OPCIONAL (ver package.json -> optionalDependencies):
-// si no está instalado, el feed automático simplemente no arranca y no rompe
-// nada más del backend.
+// si no esta instalado, el feed automatico simplemente no arranca y no rompe
+// nada mas del backend.
 let playwright;
 try {
   playwright = require('playwright');
@@ -28,27 +26,19 @@ function guardarCaptura(nombre, dataUrl) {
   return true;
 }
 
-function leerUltimaCaptura(nombre = '1D.png') {
-  try {
-    return fs.readFileSync(path.join(DIR, nombre));
-  } catch {
-    return null;
-  }
-}
+async function capturarTimeframe(browser, symbol, temporalidad, intervalo) {
+  // Carpeta por simbolo: data/capturas/BTCUSDT/
+  const symbolDir = path.join(DIR, symbol);
+  if (!fs.existsSync(symbolDir)) fs.mkdirSync(symbolDir, { recursive: true });
 
-/**
- * Abre el widget PÚBLICO de TradingView (sin login) para un timeframe y
- * guarda el PNG. Limitación conocida: al no haber sesión, no refleja
- * indicadores ni layouts personalizados — solo precio + velas, igual que la
- * versión original de este feed.
- */
-async function capturarTimeframe(browser, temporalidad, intervalo) {
-  const url = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(SYMBOL)}&interval=${intervalo}&theme=dark&hide_top_toolbar=1`;
+  // Simbolo en formato TradingView (EXCHANGE:PAR)
+  const tvSymbol = `BINANCE:${symbol}`;
+  const url = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}&interval=${intervalo}&theme=dark&hide_top_toolbar=1`;
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   try {
     await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
-    await page.waitForTimeout(2500); // deja terminar de pintar el gráfico
-    await page.screenshot({ path: path.join(DIR, `${temporalidad}.png`) });
+    await page.waitForTimeout(2500); // deja terminar de pintar el grafico
+    await page.screenshot({ path: path.join(symbolDir, `${temporalidad}.png`) });
   } finally {
     await page.close();
   }
@@ -59,8 +49,14 @@ async function capturarTodo() {
   let browser;
   try {
     browser = await playwright.chromium.launch();
-    for (const [temporalidad, intervalo] of Object.entries(INTERVALOS)) {
-      await capturarTimeframe(browser, temporalidad, intervalo);
+    for (const symbol of SYMBOLS) {
+      for (const [temporalidad, intervalo] of Object.entries(INTERVALOS)) {
+        try {
+          await capturarTimeframe(browser, symbol, temporalidad, intervalo);
+        } catch (err) {
+          console.error(`Error captura ${symbol} ${temporalidad}:`, err.message);
+        }
+      }
     }
   } catch (err) {
     console.error('Error en feed de capturas:', err.message);
@@ -74,8 +70,10 @@ function startCapturasFeed() {
     console.log('Feed de capturas desactivado: falta "playwright". Corre "npm install" y "npx playwright install chromium" para activarlo.');
     return;
   }
+  // Asegura que el directorio base existe
+  if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
   capturarTodo();
   setInterval(capturarTodo, CADA_MS);
 }
 
-module.exports = { guardarCaptura, leerUltimaCaptura, startCapturasFeed };
+module.exports = { guardarCaptura, startCapturasFeed };
