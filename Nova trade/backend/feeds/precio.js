@@ -2,22 +2,51 @@ const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
 
-const OUT = path.join(__dirname, '..', 'data', 'precios', 'latest.json');
-const SYMBOL = process.env.PRICE_SYMBOL || 'BTCUSDT';
+const DIR = path.join(__dirname, '..', 'data', 'precios');
 
-async function fetchPrice() {
+// Lista de simbolos a monitorear (pares de Binance)
+// Se puede sobreescribir via variable de entorno PRICE_SYMBOLS (separados por coma)
+const SYMBOLS = process.env.PRICE_SYMBOLS
+  ? process.env.PRICE_SYMBOLS.split(',').map(s => s.trim())
+  : ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
+     'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT'];
+
+// Asegura que el directorio de salida existe
+if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
+
+async function fetchPrices() {
   try {
-    const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${SYMBOL}`);
+    // Binance permite multiples simbolos en una sola llamada
+    const url = `https://api.binance.com/api/v3/ticker/price?symbols=["${SYMBOLS.join('","')}"]`;
+    const res = await fetch(url);
     const data = await res.json();
-    fs.writeFileSync(OUT, JSON.stringify({ ...data, ts: Date.now() }));
+
+    if (!Array.isArray(data)) {
+      console.error('Respuesta inesperada de Binance:', data);
+      return;
+    }
+
+    const ts = Date.now();
+    const resultado = {};
+
+    for (const item of data) {
+      resultado[item.symbol] = { symbol: item.symbol, price: item.price, ts };
+      // Guarda un archivo individual por simbolo: latest_BTCUSDT.json
+      const out = path.join(DIR, `latest_${item.symbol}.json`);
+      fs.writeFileSync(out, JSON.stringify({ ...item, ts }));
+    }
+
+    // Guarda tambien un archivo consolidado con todos los precios
+    fs.writeFileSync(path.join(DIR, 'latest_all.json'), JSON.stringify(resultado, null, 2));
+
   } catch (err) {
-    console.error('Error en feed de precio:', err.message);
+    console.error('Error en feed de precios:', err.message);
   }
 }
 
 function startPriceFeed() {
-  fetchPrice();
-  setInterval(fetchPrice, 1000); // cada segundo
+  fetchPrices();
+  setInterval(fetchPrices, 5000); // cada 5 segundos (10 simbolos, 1 llamada)
 }
 
-module.exports = { startPriceFeed };
+module.exports = { startPriceFeed, SYMBOLS };
