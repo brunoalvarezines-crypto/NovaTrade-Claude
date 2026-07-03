@@ -6,27 +6,31 @@ const CADA_MS = 15 * 60 * 1000; // actualizar cada 15 minutos
 
 // Mapa de simbolo Binance -> id de CoinGecko
 const COINGECKO_IDS = {
-  BTCUSDT:  'bitcoin',
-  ETHUSDT:  'ethereum',
-  BNBUSDT:  'binancecoin',
-  SOLUSDT:  'solana',
-  XRPUSDT:  'ripple',
-  ADAUSDT:  'cardano',
-  DOGEUSDT: 'dogecoin',
-  AVAXUSDT: 'avalanche-2',
-  DOTUSDT:  'polkadot',
-  MATICUSDT:'matic-network',
+  BTCUSDT:   'bitcoin',
+  ETHUSDT:   'ethereum',
+  BNBUSDT:   'binancecoin',
+  SOLUSDT:   'solana',
+  XRPUSDT:   'ripple',
+  ADAUSDT:   'cardano',
+  DOGEUSDT:  'dogecoin',
+  AVAXUSDT:  'avalanche-2',
+  DOTUSDT:   'polkadot',
+  MATICUSDT: 'matic-network',
 };
+
+// Lista de simbolos (definida explicitamente para evitar problemas de timing)
+const SYMBOLS = [
+  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
+  'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT',
+];
 
 // Nombre de archivo (estilo TradingView) -> dias de historia para CoinGecko.
 // CoinGecko OHLC: 1=1d, 7=7d, 30=30d (granularidad auto)
 const INTERVALOS = {
-  '1D':  { days: 30,  label: '1D'  },
-  '1H':  { days: 7,   label: '1H'  },
-  '15m': { days: 1,   label: '15m' },
+  '1D':  { days: 30 },
+  '1H':  { days: 7  },
+  '15m': { days: 1  },
 };
-
-const SYMBOLS = Object.keys(COINGECKO_IDS);
 
 // Asegura que el directorio base existe
 if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
@@ -40,7 +44,7 @@ function csvDeVelas(velas) {
   return [cabecera, ...filas].join('\n');
 }
 
-async function fetchTemporalidad(symbol, temporalidad, { days }) {
+async function fetchTemporalidad(symbol, temporalidad, days) {
   const id = COINGECKO_IDS[symbol];
   if (!id) return;
 
@@ -49,7 +53,7 @@ async function fetchTemporalidad(symbol, temporalidad, { days }) {
   const velas = await res.json();
 
   if (!Array.isArray(velas)) {
-    console.error(`Error en historico ${symbol} ${temporalidad}: respuesta inesperada`, velas);
+    console.error(`Error en historico ${symbol} ${temporalidad}:`, JSON.stringify(velas));
     return;
   }
 
@@ -61,10 +65,10 @@ async function fetchTemporalidad(symbol, temporalidad, { days }) {
 
 async function actualizarHistoricos() {
   for (const symbol of SYMBOLS) {
-    for (const [temporalidad, config] of Object.entries(INTERVALOS)) {
+    for (const [temporalidad, cfg] of Object.entries(INTERVALOS)) {
       try {
-        await fetchTemporalidad(symbol, temporalidad, config);
-        // Pausa breve para no exceder rate limit de CoinGecko (10-30 req/min free)
+        await fetchTemporalidad(symbol, temporalidad, cfg.days);
+        // Pausa para no exceder rate limit de CoinGecko (free: ~30 req/min)
         await new Promise(r => setTimeout(r, 1500));
       } catch (err) {
         console.error(`Error en historico ${symbol} ${temporalidad}:`, err.message);
