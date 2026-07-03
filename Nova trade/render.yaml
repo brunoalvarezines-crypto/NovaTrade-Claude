@@ -4,7 +4,7 @@ services:
     runtime: node
     rootDir: backend
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && npx playwright install chromium --with-deps
     startCommand: node server.js
     healthCheckPath: /health
     envVars:
