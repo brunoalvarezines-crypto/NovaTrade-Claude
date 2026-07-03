@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DIR = path.join(__dirname, '..', 'data', 'historicos');
-const CADA_MS = 15 * 60 * 1000; // actualizar cada 15 minutos
+const CADA_MS = 30 * 60 * 1000; // actualizar cada 30 minutos (CoinGecko free: ~30 req/min)
 
 // Mapa de simbolo Binance -> id de CoinGecko
 const COINGECKO_IDS = {
@@ -18,7 +18,7 @@ const COINGECKO_IDS = {
   MATICUSDT: 'matic-network',
 };
 
-// Lista de simbolos (definida explicitamente para evitar problemas de timing)
+// Lista de simbolos (definida explicitamente)
 const SYMBOLS = [
   'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
   'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT',
@@ -50,6 +50,13 @@ async function fetchTemporalidad(symbol, temporalidad, days) {
 
   const url = `https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=${days}`;
   const res = await fetch(url);
+
+  if (res.status === 429) {
+    console.warn(`Rate limit CoinGecko para ${symbol} ${temporalidad}. Reintentando en 60s...`);
+    await new Promise(r => setTimeout(r, 60000));
+    return fetchTemporalidad(symbol, temporalidad, days);
+  }
+
   const velas = await res.json();
 
   if (!Array.isArray(velas)) {
@@ -68,8 +75,8 @@ async function actualizarHistoricos() {
     for (const [temporalidad, cfg] of Object.entries(INTERVALOS)) {
       try {
         await fetchTemporalidad(symbol, temporalidad, cfg.days);
-        // Pausa para no exceder rate limit de CoinGecko (free: ~30 req/min)
-        await new Promise(r => setTimeout(r, 1500));
+        // Pausa 3s entre requests (10 simbolos × 3 TF = 30 requests, con 3s = 1.5min total)
+        await new Promise(r => setTimeout(r, 3000));
       } catch (err) {
         console.error(`Error en historico ${symbol} ${temporalidad}:`, err.message);
       }
