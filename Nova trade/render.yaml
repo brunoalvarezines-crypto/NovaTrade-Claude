@@ -2,6 +2,7 @@ services:
   - type: web
     name: novatrade
     runtime: node
+    rootDir: Nova trade/backend
     plan: free
     buildCommand: npm install && PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers npx playwright install chromium
     startCommand: PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers node server.js
