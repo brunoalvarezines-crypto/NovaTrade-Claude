@@ -3,8 +3,8 @@ services:
     name: novatrade
     runtime: node
     plan: free
-    buildCommand: npm install && npx playwright install chromium --with-deps
-    startCommand: node server.js
+    buildCommand: npm install && PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers npx playwright install chromium
+    startCommand: PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers node server.js
     healthCheckPath: /health
     envVars:
       - key: ANTHROPIC_API_KEY
