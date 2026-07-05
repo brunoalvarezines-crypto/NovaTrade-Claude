@@ -46,23 +46,22 @@ async function capturarTimeframe(browser, symbol, temporalidad, intervalo) {
 
 async function capturarTodo() {
   if (!playwright) return;
-  let browser;
-  try {
-    browser = await playwright.chromium.launch({
-      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-    });
-    for (const symbol of SYMBOLS) {
+  for (const symbol of SYMBOLS) {
+    let browser;
+    try {
+      browser = await playwright.chromium.launch({
+        args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+      });
       for (const [temporalidad, intervalo] of Object.entries(INTERVALOS)) {
         await capturarTimeframe(browser, symbol, temporalidad, intervalo);
       }
+    } catch (err) {
+      console.error(`Error en capturas de ${symbol}:`, err.message);
+    } finally {
+      if (browser) await browser.close().catch(() => {});
     }
-  } catch (err) {
-    console.error('Error en feed de capturas:', err.message);
-  } finally {
-    if (browser) await browser.close();
   }
 }
-
 function startCapturasFeed() {
   if (!playwright) {
     console.log('Feed de capturas desactivado: falta "playwright".');
