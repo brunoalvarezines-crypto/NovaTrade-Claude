@@ -73,4 +73,4 @@ function startPriceFeed() {
   setInterval(fetchPrices, 30000); // CoinGecko free: max ~30 req/min, usamos 30s
 }
 
-module.exports = { startPriceFeed, fetchPrices };
+module.exports = { startPriceFeed, fetchPrices, SYMBOLS };
