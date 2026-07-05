@@ -1,100 +1,56 @@
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
 
 const DIR = path.join(__dirname, '..', 'data', 'historicos');
-const CADA_MS = 30 * 60 * 1000; // actualizar cada 30 minutos (CoinGecko free: ~30 req/min)
+const CADA_MS = 30 * 60 * 1000; // actualizar cada 30 min
 
-// Mapa de simbolo Binance -> id de CoinGecko
-const COINGECKO_IDS = {
-  BTCUSDT:   'bitcoin',
-  ETHUSDT:   'ethereum',
-  BNBUSDT:   'binancecoin',
-  SOLUSDT:   'solana',
-  XRPUSDT:   'ripple',
-  ADAUSDT:   'cardano',
-  DOGEUSDT:  'dogecoin',
-  AVAXUSDT:  'avalanche-2',
-  DOTUSDT:   'polkadot',
-  MATICUSDT: 'matic-network',
-};
+const SYMBOL = process.env.HISTORICOS_SYMBOL || 'BTCUSDT';
 
-// Lista de simbolos (definida explicitamente)
-const SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
-  'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT',
-];
-
-// Nombre de archivo (estilo TradingView) -> dias de historia para CoinGecko.
-// CoinGecko OHLC: 1=1d, 7=7d, 30=30d (granularidad auto)
 const INTERVALOS = {
-  '1D':  { days: 30 },
-  '1H':  { days: 7  },
-  '15m': { days: 1  },
+  '1D':  { interval: '1d',  limit: 90  },
+  '1H':  { interval: '1h',  limit: 168 },
+  '15m': { interval: '15m', limit: 672 },
 };
 
-// Asegura que el directorio base existe
 if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
 
-function csvDeVelas(velas) {
+function csvDeVelas(klines) {
   const cabecera = 'time,open,high,low,close,volume';
-  const filas = velas.map((v) => {
-    const [tiempoApertura, open, high, low, close] = v;
-    return `${new Date(tiempoApertura).toISOString()},${open},${high},${low},${close},0`;
+  const filas = klines.map(v => {
+    const [openTime, open, high, low, close, volume] = v;
+    return `${new Date(openTime).toISOString()},${open},${high},${low},${close},${volume}`;
   });
   return [cabecera, ...filas].join('\n');
 }
 
-async function fetchTemporalidad(symbol, temporalidad, days) {
-  const id = COINGECKO_IDS[symbol];
-  if (!id) return;
-
-  const url = `https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=${days}`;
+async function fetchTemporalidad(temporalidad, config) {
+  const { interval, limit } = config;
+  const url = `https://api.binance.us/api/v3/klines?symbol=${SYMBOL}&interval=${interval}&limit=${limit}`;
   const res = await fetch(url);
-
-  if (res.status === 429) {
-    console.warn(`Rate limit CoinGecko para ${symbol} ${temporalidad}. Reintentando en 60s...`);
-    await new Promise(r => setTimeout(r, 60000));
-    return fetchTemporalidad(symbol, temporalidad, days);
-  }
-
-  const velas = await res.json();
-
-  if (!Array.isArray(velas)) {
-    console.error(`Error en historico ${symbol} ${temporalidad}:`, JSON.stringify(velas));
+  const klines = await res.json();
+  if (!Array.isArray(klines)) {
+    console.error(`Histórico ${temporalidad}: respuesta inesperada`, JSON.stringify(klines).slice(0, 80));
     return;
   }
-
-  // Carpeta por simbolo: data/historicos/BTCUSDT/
-  const symbolDir = path.join(DIR, symbol);
-  if (!fs.existsSync(symbolDir)) fs.mkdirSync(symbolDir, { recursive: true });
-  fs.writeFileSync(path.join(symbolDir, `${temporalidad}.csv`), csvDeVelas(velas));
+  const csv = csvDeVelas(klines);
+  fs.writeFileSync(path.join(DIR, `${temporalidad}.csv`), csv);
+  console.log(`Histórico ${temporalidad}: ${klines.length} velas (${SYMBOL})`);
 }
 
-async function actualizarHistoricos() {
-  for (const symbol of SYMBOLS) {
-    for (const [temporalidad, cfg] of Object.entries(INTERVALOS)) {
-      try {
-        await fetchTemporalidad(symbol, temporalidad, cfg.days);
-        // Pausa 3s entre requests (10 simbolos × 3 TF = 30 requests, con 3s = 1.5min total)
-        await new Promise(r => setTimeout(r, 3000));
-      } catch (err) {
-        console.error(`Error en historico ${symbol} ${temporalidad}:`, err.message);
-      }
+async function fetchHistoricos() {
+  for (const [temporalidad, config] of Object.entries(INTERVALOS)) {
+    try {
+      await fetchTemporalidad(temporalidad, config);
+    } catch (err) {
+      console.error(`Error en histórico ${temporalidad}:`, err.message);
     }
   }
 }
 
-function leerHistorico(symbol, temporalidad) {
-  try {
-    return fs.readFileSync(path.join(DIR, symbol, `${temporalidad}.csv`), 'utf-8');
-  } catch {
-    return null;
-  }
-}
-
 function startHistoricosFeed() {
-  actualizarHistoricos();
-  setInterval(actualizarHistoricos, CADA_MS);
+  fetchHistoricos();
+  setInterval(fetchHistoricos, CADA_MS);
 }
 
-module.exports = { startHistoricosFeed, leerHistorico, actualizarHistoricos };
+module.exports = { startHistoricosFeed };
