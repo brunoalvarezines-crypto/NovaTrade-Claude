@@ -1278,12 +1278,11 @@
       .replace(/^## (.+)$/gm,'<h2 style="font-size:1.25em;font-weight:700;margin:16px 0 8px">$1</h2>')
       .replace(/^# (.+)$/gm,'<h1 style="font-size:1.4em;font-weight:700;margin:18px 0 10px">$1</h1>')
       .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-      .replace(/\*([^*
-]+?)\*/g,'<em>$1</em>')
+      .replace(/\*([^*]+?)\*/g,'<em>$1</em>')
       .replace(/^---+$/gm,'<hr style="border:none;border-top:1px solid #444;margin:10px 0">')
-      .replace(/
-/g,'<br>');
+      .replace(/\n/g,'<br>');
   }
+
 </script>
 </body>
 </html>
