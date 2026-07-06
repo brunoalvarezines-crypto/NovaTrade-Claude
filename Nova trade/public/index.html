@@ -1072,7 +1072,7 @@
       const replyText = await askBackend(queryText, imageDataUrl);
 
       removeTyping();
-      appendBot('<p>' + escHtml(replyText) + '</p>', queryText);
+      appendBot(marked.parse(replyText), queryText);
 
     } catch (err) {
       removeTyping();
@@ -1268,5 +1268,6 @@
   }
 
 </script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </body>
 </html>
