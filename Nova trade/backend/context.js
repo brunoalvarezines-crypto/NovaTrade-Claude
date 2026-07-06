@@ -41,7 +41,6 @@ function tailLines(text, n) {
 
 function activosMencionados(mensaje) {
   const lower = mensaje.toLowerCase();
-  // Si la pregunta es general (sin activo específico), devuelve forex+commodities
   const mencionados = MULTI_ACTIVOS.filter(simbolo =>
     (KEYWORDS[simbolo] || []).some(kw => lower.includes(kw))
   );
@@ -49,14 +48,14 @@ function activosMencionados(mensaje) {
 }
 
 async function buildContext(mensaje = '') {
-  // ── Crypto (siempre incluido) ──
+  // Crypto (siempre incluido)
   const precio = readJSON(path.join(DATA, 'precios', 'latest.json'));
   const noticias = readJSON(path.join(DATA, 'noticias', 'latest.json'));
   const csv1D  = tailLines(readText(path.join(DATA, 'historicos', '1D.csv')),  30);
   const csv1H  = tailLines(readText(path.join(DATA, 'historicos', '1H.csv')),  30);
   const csv15m = tailLines(readText(path.join(DATA, 'historicos', '15m.csv')), 30);
 
-  // ── Multi-activos (forex, commodities, acciones) ──
+  // Multi-activos (forex, commodities, acciones)
   const preciosMulti = readJSON(path.join(DATA, 'precios-multi', 'latest.json'));
   const activos = activosMencionados(mensaje);
 
