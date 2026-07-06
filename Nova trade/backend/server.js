@@ -8,6 +8,8 @@ const { buildContext } = require('./context');
 const { startPriceFeed } = require('./feeds/precio');
 const { startNewsFeed } = require('./feeds/noticias');
 const { startHistoricosFeed } = require('./feeds/historicos');
+const { startPrecioMultiFeed } = require('./feeds/precio-multi');
+const { startHistoricosMultiFeed } = require('./feeds/historicos-multi');
 const { startCapturasFeed } = require('./feeds/capturas');
 const { startReviewJob } = require('./jobs/revision');
 
@@ -33,7 +35,7 @@ app.post('/chat', async (req, res) => {
     if (!message && !image) {
       return res.status(400).json({ error: 'Falta "message" o "image" en el cuerpo de la petición.' });
     }
-    const context = await buildContext();
+    const context = await buildContext(message || '');
     const reply = await askClaude({ message, image, context });
     res.json({ reply });
   } catch (err) {
@@ -47,6 +49,8 @@ app.listen(PORT, () => {
   startPriceFeed();
   startNewsFeed();
   startHistoricosFeed();
+  startPrecioMultiFeed();
+  startHistoricosMultiFeed();
   startCapturasFeed();
   if (process.env.ENABLE_REVIEW_JOB === 'true') {
     startReviewJob();

@@ -7,7 +7,7 @@ const path = require('path');
 // y entonces estas carpetas no llegan al repo ni al servidor de Render.
 // Esto las crea solas al arrancar, para que los feeds nunca fallen por
 // "no existe la carpeta".
-const SUBCARPETAS = ['precios', 'noticias', 'historicos', 'capturas', 'revisiones'];
+const SUBCARPETAS = ['precios', 'noticias', 'historicos', 'capturas', 'revisiones', 'precios-multi', 'historicos-multi'];
 
 function ensureDataDirs() {
   for (const sub of SUBCARPETAS) {
