@@ -185,7 +185,7 @@
     color: var(--text2); letter-spacing: 2px; text-transform: lowercase;
   }
   .login-subtitle {
-    text-align: center; font-size: 13px; color: var(--text2); margin-top: -8px;
+    text-align: center; font-size: 13px; color: var(--text2); margin-top: 4px;
   }
 
   /* ── VERIFY EMAIL SCREEN ── */
@@ -557,8 +557,9 @@
   #scroll-to-bottom-btn {
     display: none;
     position: fixed;
-    bottom: 90px;
-    right: 18px;
+    bottom: 110px;
+    left: 50%;
+    transform: translateX(-50%);
     width: 34px;
     height: 34px;
     border-radius: 50%;
@@ -679,8 +680,7 @@
   <div id="login-screen">
     <div class="login-box">
       <div class="login-logo-wrap">
-        <canvas class="nt-logo-canvas" width="200" height="200" style="width:64px;height:64px;display:block;"></canvas>
-        <div class="login-logo">novatrade</div>
+        <canvas class="nt-logo-canvas" width="200" height="200" style="width:110px;height:110px;display:block;"></canvas>
       </div>
       <div class="login-subtitle" id="login-subtitle">Inicia sesión para continuar</div>
       <input class="login-input" id="login-email" type="email" placeholder="Correo electrónico" autocomplete="email"/>
