@@ -48,12 +48,12 @@ app.post('/api/title', async (req, res) => {
 
 app.post('/chat', async (req, res) => {
   try {
-    const { message, image } = req.body || {};
+    const { message, image, history } = req.body || {};
     if (!message && !image) {
       return res.status(400).json({ error: 'Falta "message" o "image" en el cuerpo de la petición.' });
     }
     const context = await buildContext(message || '');
-    const reply = await askClaude({ message, image, context });
+    const reply = await askClaude({ message, image, context, history: history || [] });
     res.json({ reply });
   } catch (err) {
     console.error('Error en /chat:', err);

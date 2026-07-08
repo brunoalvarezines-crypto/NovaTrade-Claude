@@ -11,27 +11,40 @@ const systemPrompt = fs.readFileSync(path.join(__dirname, 'system-prompt.md'), '
  *   image: data URL completa ("data:image/png;base64,...") si el usuario
  *   adjunta una captura/foto en el chat.
  */
-async function askClaude({ message, image, context }) {
-  const content = [];
+async function askClaude({ message, image, context, history = [] }) {
+  // Mensajes anteriores de la conversación (sin contexto de mercado, solo el texto)
+  const messages = history.slice(-20).map(m => ({
+    role: m.role,
+    content: m.content
+  }));
 
+  // Si el último mensaje del historial ya es del usuario (el actual), lo eliminamos
+  // para evitar duplicado — lo añadimos abajo con el contexto de mercado
+  if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+    messages.pop();
+  }
+
+  // Construir el mensaje actual con contexto de mercado
+  const currentContent = [];
   if (image) {
     const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(image);
     if (match) {
       const [, mediaType, data] = match;
-      content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
+      currentContent.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
     }
   }
-
-  content.push({
+  currentContent.push({
     type: 'text',
     text: `${message || ''}\n\n--- Contexto de mercado actual ---\n${context}`.trim(),
   });
+
+  messages.push({ role: 'user', content: currentContent });
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 1024,
     system: systemPrompt,
-    messages: [{ role: 'user', content }],
+    messages,
   });
 
   return response.content

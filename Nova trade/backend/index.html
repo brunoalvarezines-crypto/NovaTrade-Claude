@@ -1199,11 +1199,13 @@
 
   // Llama al backend propio de NovaTrade (Claude corre en el servidor;
   // aquí solo se manda el texto y, si hay, una imagen en base64).
+  let chatHistory = []; // [{role:'user'|'assistant', content:'...'}]
+
   async function askBackend(text, imageDataUrl, signal) {
     const res = await fetch('/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, image: imageDataUrl || null }),
+      body: JSON.stringify({ message: text, image: imageDataUrl || null, history: chatHistory.slice(-20) }),
       signal: signal
     });
     if (!res.ok) {
@@ -1271,7 +1273,9 @@
       if (currentConvId && queryText) saveMessage(currentConvId, 'user', queryText);
 
       currentAbortController = new AbortController();
+      chatHistory.push({ role: 'user', content: queryText });
       const replyText = await askBackend(queryText, imageDataUrl, currentAbortController.signal);
+      chatHistory.push({ role: 'assistant', content: replyText });
 
       removeTyping();
       appendBot(renderMd(replyText), queryText);
@@ -1636,6 +1640,7 @@
       .order('created_at');
     if (!data || data.length === 0) { newChat(); return; }
     const w = document.getElementById('welcome'); if (w) w.remove();
+    chatHistory = data.map(m => ({ role: m.role, content: m.content }));
     data.forEach(m => {
       if (m.role === 'user') appendUser(m.content, null);
       else appendBot(renderMd(m.content), '');
@@ -1644,7 +1649,7 @@
 
   // Sobreescribir newChat para limpiar convId
   const _origNewChat = newChat;
-  newChat = function() { currentConvId = null; _origNewChat(); loadConversations(); };
+  newChat = function() { currentConvId = null; chatHistory = []; _origNewChat(); loadConversations(); };
 
   initAuth();
 
