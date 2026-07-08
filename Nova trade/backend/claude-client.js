@@ -41,4 +41,4 @@ async function askClaude({ message, image, context }) {
     .trim();
 }
 
-module.exports = { askClaude };
+module.exports = { askClaude, anthropic };

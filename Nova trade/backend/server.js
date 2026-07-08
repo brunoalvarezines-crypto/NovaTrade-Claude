@@ -3,7 +3,7 @@ const express = require('express');
 const path = require('path');
 
 const { ensureDataDirs } = require('./ensure-data-dirs');
-const { askClaude } = require('./claude-client');
+const { askClaude, anthropic } = require('./claude-client');
 const { buildContext } = require('./context');
 const { startPriceFeed } = require('./feeds/precio');
 const { startNewsFeed } = require('./feeds/noticias');
@@ -27,6 +27,23 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.get('/health', (req, res) => {
   res.json({ ok: true, ts: Date.now() });
+});
+
+app.post('/api/title', async (req, res) => {
+  try {
+    const { message } = req.body || {};
+    if (!message) return res.status(400).json({ error: 'Falta message' });
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 20,
+      system: 'Genera un título corto (3-5 palabras, sin puntuación, sin comillas) que resuma esta pregunta de trading. Solo el título, nada más.',
+      messages: [{ role: 'user', content: message }]
+    });
+    const title = response.content[0].text.trim().replace(/^["'«»]|["'«»]$/g, '');
+    res.json({ title });
+  } catch (err) {
+    res.status(500).json({ error: 'Error generando título' });
+  }
 });
 
 app.post('/chat', async (req, res) => {
