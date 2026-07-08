@@ -177,13 +177,44 @@
     width: 100%; max-width: 360px;
     display: flex; flex-direction: column; gap: 20px;
   }
+  .login-logo-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
   .login-logo {
-    text-align: center; font-size: 22px; font-weight: 600;
-    color: var(--logo-green); letter-spacing: 0.5px;
+    text-align: center; font-size: 11px; font-weight: 300;
+    color: var(--text2); letter-spacing: 2px; text-transform: lowercase;
   }
   .login-subtitle {
-    text-align: center; font-size: 13px; color: var(--text2); margin-top: -12px;
+    text-align: center; font-size: 13px; color: var(--text2); margin-top: -8px;
   }
+
+  /* ── VERIFY EMAIL SCREEN ── */
+  #verify-screen {
+    position: fixed; inset: 0; background: var(--bg);
+    display: none; align-items: center; justify-content: center;
+    z-index: 1001; padding: 24px;
+    flex-direction: column; gap: 24px;
+  }
+  #verify-screen.visible { display: flex; }
+  .verify-icon {
+    width: 72px; height: 72px; border-radius: 20px;
+    background: rgba(74,158,122,0.1);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .verify-icon svg { color: var(--logo-green); }
+  .verify-title {
+    font-size: 20px; font-weight: 500; color: var(--text);
+    text-align: center; letter-spacing: -0.2px;
+  }
+  .verify-sub {
+    font-size: 13px; color: var(--text2); text-align: center;
+    line-height: 1.6; max-width: 280px;
+  }
+  .verify-back {
+    font-size: 12px; color: var(--text3); cursor: pointer;
+    border: none; background: none; padding: 4px;
+  }
+  .verify-back:hover { color: var(--text2); }
   .login-input {
     width: 100%; padding: 12px 14px; border-radius: 10px;
     background: var(--surface); border: 1px solid var(--border);
@@ -631,10 +662,26 @@
 
 <div id="app">
 
+  <!-- VERIFY EMAIL SCREEN -->
+  <div id="verify-screen">
+    <div class="verify-icon">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="4" width="20" height="16" rx="3"/>
+        <polyline points="2,4 12,13 22,4"/>
+      </svg>
+    </div>
+    <div class="verify-title">Verifica tu correo</div>
+    <div class="verify-sub">Te hemos enviado un enlace de confirmación.<br>Ábrelo y vuelve aquí para iniciar sesión.</div>
+    <button class="verify-back" onclick="document.getElementById('verify-screen').classList.remove('visible')">← Volver al inicio de sesión</button>
+  </div>
+
   <!-- LOGIN SCREEN -->
   <div id="login-screen">
     <div class="login-box">
-      <div class="login-logo">NovaTrade</div>
+      <div class="login-logo-wrap">
+        <canvas class="nt-logo-canvas" width="200" height="200" style="width:64px;height:64px;display:block;"></canvas>
+        <div class="login-logo">novatrade</div>
+      </div>
       <div class="login-subtitle" id="login-subtitle">Inicia sesión para continuar</div>
       <input class="login-input" id="login-email" type="email" placeholder="Correo electrónico" autocomplete="email"/>
       <input class="login-input" id="login-password" type="password" placeholder="Contraseña" autocomplete="current-password"/>
@@ -1460,6 +1507,7 @@
   function onLogin(user) {
     currentUser = user;
     document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('verify-screen').classList.remove('visible');
     document.getElementById('sidebar-email').textContent = user.email;
     loadConversations();
   }
@@ -1492,10 +1540,9 @@
     btn.disabled = true; btn.textContent = '…';
     try {
       if (isRegisterMode) {
-        const { error } = await supa.auth.signUp({ email, password });
+        const { error } = await supa.auth.signUp({ email, password, options: { emailRedirectTo: 'https://novatrade-8ynd.onrender.com' } });
         if (error) throw error;
-        errEl.style.color = 'var(--logo-green)';
-        errEl.textContent = 'Revisa tu correo para confirmar la cuenta.';
+        document.getElementById('verify-screen').classList.add('visible');
       } else {
         const { error } = await supa.auth.signInWithPassword({ email, password });
         if (error) throw error;
