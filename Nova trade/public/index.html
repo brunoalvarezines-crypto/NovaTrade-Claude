@@ -416,6 +416,26 @@
     40% { transform:translateY(-5px); opacity:0.9; }
   }
 
+  /* ── STREAMING ── */
+  .streaming-wrap { position: relative; width: 100%; }
+  .streaming-fade {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 52px;
+    background: linear-gradient(to bottom, transparent, #080c0a);
+    pointer-events: none;
+  }
+  .streaming-cursor {
+    display: inline-block;
+    width: 2px; height: 0.85em;
+    background: var(--text2);
+    border-radius: 1px;
+    vertical-align: text-bottom;
+    margin-left: 2px;
+    animation: scursor 0.7s step-end infinite;
+  }
+  @keyframes scursor { 0%,100%{opacity:1} 50%{opacity:0} }
+
   /* ── INPUT AREA ── */
   #input-area {
     flex-shrink: 0;
@@ -1234,7 +1254,7 @@
           if (parsed.error) throw new Error(parsed.error);
           if (parsed.token) {
             fullText += parsed.token;
-            if (onToken) onToken(fullText);
+            if (onToken) onToken(parsed.token); // solo el delta
           }
         } catch(e) { if (e.message && !e.message.startsWith('JSON')) throw e; }
       }
@@ -1303,9 +1323,9 @@
       chatHistory.push({ role: 'user', content: queryText });
 
       let streamingStarted = false;
-      const replyText = await askBackend(queryText, imageDataUrl, currentAbortController.signal, (partial) => {
+      const replyText = await askBackend(queryText, imageDataUrl, currentAbortController.signal, (delta) => {
         if (!streamingStarted) { streamingStarted = true; startBotStreaming(); }
-        updateBotStreaming(partial);
+        queueStreamingToken(delta);
       });
 
       chatHistory.push({ role: 'assistant', content: replyText });
@@ -1381,6 +1401,9 @@
   // ── STREAMING helpers ──
   let streamingBotDiv = null;
   let streamingContentId = null;
+  let streamingTokenQueue = [];
+  let streamingRafId = null;
+  let streamingAccumulatedText = '';
 
   // Quita solo los 3 puntos, mantiene isTyping=true y el botón stop
   function removeTypingIndicator() {
@@ -1389,26 +1412,43 @@
 
   function startBotStreaming() {
     removeTypingIndicator();
+    streamingAccumulatedText = '';
+    streamingTokenQueue = [];
+    if (streamingRafId) { cancelAnimationFrame(streamingRafId); streamingRafId = null; }
     const msgs = document.getElementById('chat-messages');
     const d = document.createElement('div');
     d.className = 'msg-row bot';
     const actionId = 'msg-act-' + (++msgActionIdSeq);
     d.setAttribute('data-action-id', actionId);
-    d.innerHTML = `<div class="msg-content" id="${actionId}-content"></div>`;
+    d.innerHTML = `<div class="streaming-wrap"><div class="msg-content" id="${actionId}-content"></div><div class="streaming-fade"></div></div>`;
     msgs.appendChild(d);
     streamingBotDiv = d;
     streamingContentId = actionId + '-content';
   }
 
-  function updateBotStreaming(rawText) {
-    if (!streamingContentId) return;
+  // Encola el delta y programa un frame — no toca el DOM directamente
+  function queueStreamingToken(delta) {
+    streamingTokenQueue.push(delta);
+    if (!streamingRafId) streamingRafId = requestAnimationFrame(drainStreamingQueue);
+  }
+
+  // Drena la cola de tokens una vez por frame (60 fps máx.)
+  function drainStreamingQueue() {
+    streamingRafId = null;
+    if (!streamingContentId || streamingTokenQueue.length === 0) return;
+    streamingAccumulatedText += streamingTokenQueue.join('');
+    streamingTokenQueue = [];
     const el = document.getElementById(streamingContentId);
-    if (el) el.innerHTML = renderMd(rawText);
+    // Texto plano durante streaming — sin renderMd para que no aparezcan ## etc.
+    if (el) el.innerHTML = esc(streamingAccumulatedText) + '<span class="streaming-cursor"></span>';
     const s = document.getElementById('chat-scroll');
-    if (s.scrollHeight - s.scrollTop - s.clientHeight < 220) scrollDown();
+    if (s.scrollHeight - s.scrollTop - s.clientHeight < 260) s.scrollTop = s.scrollHeight;
   }
 
   function finalizeBotStreaming(html) {
+    if (streamingRafId) { cancelAnimationFrame(streamingRafId); streamingRafId = null; }
+    streamingTokenQueue = [];
+    streamingAccumulatedText = '';
     if (!streamingBotDiv) return;
     const actionId = streamingBotDiv.getAttribute('data-action-id');
     streamingBotDiv.innerHTML = `<div class="msg-content" id="${actionId}-content">${html}</div>
