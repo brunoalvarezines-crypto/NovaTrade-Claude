@@ -1424,6 +1424,12 @@
     msgs.appendChild(d);
     streamingBotDiv = d;
     streamingContentId = actionId + '-content';
+    // Scroll al inicio del mensaje, luego la cámara se queda quieta
+    setTimeout(() => {
+      const s = document.getElementById('chat-scroll');
+      const top = d.offsetTop - 16;
+      s.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }, 30);
   }
 
   // Encola el delta y programa un frame — no toca el DOM directamente
@@ -1441,8 +1447,6 @@
     const el = document.getElementById(streamingContentId);
     // Texto plano durante streaming — sin renderMd para que no aparezcan ## etc.
     if (el) el.innerHTML = esc(streamingAccumulatedText) + '<span class="streaming-cursor"></span>';
-    const s = document.getElementById('chat-scroll');
-    if (s.scrollHeight - s.scrollTop - s.clientHeight < 260) s.scrollTop = s.scrollHeight;
   }
 
   function finalizeBotStreaming(html) {
