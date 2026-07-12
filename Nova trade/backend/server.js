@@ -64,10 +64,12 @@ app.post('/chat', async (req, res) => {
 
     const stream = askClaudeStream({ message, image, context, history: history || [] });
 
-    // Mandar cada delta de texto al cliente
-    for await (const text of stream.textStream) {
+    // Mandar cada delta de texto al cliente (compatible con todas las versiones del SDK)
+    for await (const event of stream) {
       if (res.writableEnded) break;
-      res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
+      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+        res.write(`data: ${JSON.stringify({ token: event.delta.text })}\n\n`);
+      }
     }
 
     if (!res.writableEnded) {
