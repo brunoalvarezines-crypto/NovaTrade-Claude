@@ -61,6 +61,8 @@ app.post('/chat', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); // evita buffer en proxies nginx
     res.flushHeaders();
+    // Desactiva Nagle: cada write() sale por TCP inmediatamente sin esperar
+    req.socket?.setNoDelay(true);
 
     const stream = askClaudeStream({ message, image, context, history: history || [] });
 
