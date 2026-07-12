@@ -1339,6 +1339,7 @@
       if (currentConvId) saveMessage(currentConvId, 'assistant', replyText);
 
     } catch (err) {
+      if (charTimerId) { clearInterval(charTimerId); charTimerId = null; charQueue = []; }
       removeTyping();
       if (streamingBotDiv) { streamingBotDiv.remove(); streamingBotDiv = null; streamingContentId = null; }
       if (err.name === 'AbortError') return; // usuario canceló
@@ -1401,20 +1402,28 @@
   // ── STREAMING helpers ──
   let streamingBotDiv = null;
   let streamingContentId = null;
-  let streamingTokenQueue = [];
-  let streamingRafId = null;
   let streamingAccumulatedText = '';
+  let charQueue = [];      // letras pendientes de mostrar (typewriter)
+  let charTimerId = null;  // setInterval del typewriter
 
-  // Quita solo los 3 puntos, mantiene isTyping=true y el botón stop
   function removeTypingIndicator() {
     const t = document.getElementById('typing-row'); if(t) t.remove();
+  }
+
+  // Elimina sintaxis markdown para texto limpio durante streaming (sin ## ni **)
+  function stripMd(text) {
+    return text
+      .replace(/^#{1,3} /gm, '')
+      .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+      .replace(/\*([^*\n]+)\*/g, '$1')
+      .replace(/^---+$/gm, '');
   }
 
   function startBotStreaming() {
     removeTypingIndicator();
     streamingAccumulatedText = '';
-    streamingTokenQueue = [];
-    if (streamingRafId) { cancelAnimationFrame(streamingRafId); streamingRafId = null; }
+    charQueue = [];
+    if (charTimerId) { clearInterval(charTimerId); charTimerId = null; }
     const msgs = document.getElementById('chat-messages');
     const d = document.createElement('div');
     d.className = 'msg-row bot';
@@ -1424,34 +1433,31 @@
     msgs.appendChild(d);
     streamingBotDiv = d;
     streamingContentId = actionId + '-content';
-    // Scroll al inicio del mensaje, luego la cámara se queda quieta
-    setTimeout(() => {
+    // Scroll instantáneo al inicio del mensaje — cámara fija durante el streaming
+    requestAnimationFrame(() => {
       const s = document.getElementById('chat-scroll');
-      const top = d.offsetTop - 16;
-      s.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-    }, 30);
+      s.scrollTop = Math.max(0, d.offsetTop - 16);
+    });
   }
 
-  // Encola el delta y programa un frame — no toca el DOM directamente
+  // Cada token se descompone en letras individuales y se encolan
   function queueStreamingToken(delta) {
-    streamingTokenQueue.push(delta);
-    if (!streamingRafId) streamingRafId = requestAnimationFrame(drainStreamingQueue);
+    for (const ch of delta) charQueue.push(ch);
+    if (!charTimerId) charTimerId = setInterval(drainCharQueue, 28); // ~35 chars/s
   }
 
-  // Drena la cola de tokens una vez por frame (60 fps máx.)
-  function drainStreamingQueue() {
-    streamingRafId = null;
-    if (!streamingContentId || streamingTokenQueue.length === 0) return;
-    streamingAccumulatedText += streamingTokenQueue.join('');
-    streamingTokenQueue = [];
+  // Muestra 1 letra por tick — efecto typewriter continuo
+  function drainCharQueue() {
+    if (!streamingContentId) { clearInterval(charTimerId); charTimerId = null; return; }
+    if (charQueue.length === 0) return;
+    streamingAccumulatedText += charQueue.shift();
     const el = document.getElementById(streamingContentId);
-    // Texto plano durante streaming — sin renderMd para que no aparezcan ## etc.
-    if (el) el.innerHTML = esc(streamingAccumulatedText) + '<span class="streaming-cursor"></span>';
+    if (el) el.innerHTML = esc(stripMd(streamingAccumulatedText)) + '<span class="streaming-cursor"></span>';
   }
 
   function finalizeBotStreaming(html) {
-    if (streamingRafId) { cancelAnimationFrame(streamingRafId); streamingRafId = null; }
-    streamingTokenQueue = [];
+    if (charTimerId) { clearInterval(charTimerId); charTimerId = null; }
+    charQueue = [];
     streamingAccumulatedText = '';
     if (!streamingBotDiv) return;
     const actionId = streamingBotDiv.getAttribute('data-action-id');
