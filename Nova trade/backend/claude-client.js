@@ -54,4 +54,41 @@ async function askClaude({ message, image, context, history = [] }) {
     .trim();
 }
 
-module.exports = { askClaude, anthropic };
+/**
+ * Versión streaming de askClaude.
+ * Devuelve un Stream de Anthropic con .textStream iterable.
+ */
+function askClaudeStream({ message, image, context, history = [] }) {
+  const messages = history.slice(-20).map(m => ({
+    role: m.role,
+    content: m.content
+  }));
+
+  if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+    messages.pop();
+  }
+
+  const currentContent = [];
+  if (image) {
+    const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(image);
+    if (match) {
+      const [, mediaType, data] = match;
+      currentContent.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
+    }
+  }
+  currentContent.push({
+    type: 'text',
+    text: `${message || ''}\n\n--- Contexto de mercado actual ---\n${context}`.trim(),
+  });
+
+  messages.push({ role: 'user', content: currentContent });
+
+  return anthropic.messages.stream({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages,
+  });
+}
+
+module.exports = { askClaude, askClaudeStream, anthropic };

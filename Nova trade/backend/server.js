@@ -3,7 +3,7 @@ const express = require('express');
 const path = require('path');
 
 const { ensureDataDirs } = require('./ensure-data-dirs');
-const { askClaude, anthropic } = require('./claude-client');
+const { askClaude, askClaudeStream, anthropic } = require('./claude-client');
 const { buildContext } = require('./context');
 const { startPriceFeed } = require('./feeds/precio');
 const { startNewsFeed } = require('./feeds/noticias');
@@ -52,12 +52,36 @@ app.post('/chat', async (req, res) => {
     if (!message && !image) {
       return res.status(400).json({ error: 'Falta "message" o "image" en el cuerpo de la petición.' });
     }
+
     const context = await buildContext(message || '');
-    const reply = await askClaude({ message, image, context, history: history || [] });
-    res.json({ reply });
+
+    // Cabeceras SSE (Server-Sent Events)
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // evita buffer en proxies nginx
+    res.flushHeaders();
+
+    const stream = askClaudeStream({ message, image, context, history: history || [] });
+
+    // Mandar cada delta de texto al cliente
+    for await (const text of stream.textStream) {
+      if (res.writableEnded) break;
+      res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
+    }
+
+    if (!res.writableEnded) {
+      res.write('data: [DONE]\n\n');
+      res.end();
+    }
   } catch (err) {
     console.error('Error en /chat:', err);
-    res.status(500).json({ error: 'Error interno al consultar al agente.' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error interno al consultar al agente.' });
+    } else if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
+    }
   }
 });
 
