@@ -41,6 +41,7 @@ function tailLines(text, n) {
 
 function activosMencionados(mensaje) {
   const lower = mensaje.toLowerCase();
+  // Si la pregunta es general (sin activo específico), devuelve forex+commodities
   const mencionados = MULTI_ACTIVOS.filter(simbolo =>
     (KEYWORDS[simbolo] || []).some(kw => lower.includes(kw))
   );
@@ -48,14 +49,22 @@ function activosMencionados(mensaje) {
 }
 
 async function buildContext(mensaje = '') {
-  // -- Crypto (siempre incluido) --
+  // ── Hora actual en Madrid ──
+  const ahora = new Date();
+  const horaEspana = ahora.toLocaleString('es-ES', {
+    timeZone: 'Europe/Madrid',
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  });
+
+  // ── Crypto (siempre incluido) ──
   const precio = readJSON(path.join(DATA, 'precios', 'latest.json'));
   const noticias = readJSON(path.join(DATA, 'noticias', 'latest.json'));
   const csv1D  = tailLines(readText(path.join(DATA, 'historicos', '1D.csv')),  30);
   const csv1H  = tailLines(readText(path.join(DATA, 'historicos', '1H.csv')),  30);
   const csv15m = tailLines(readText(path.join(DATA, 'historicos', '15m.csv')), 30);
 
-  // -- Multi-activos (forex, commodities, acciones) --
+  // ── Multi-activos (forex, commodities, acciones) ──
   const preciosMulti = readJSON(path.join(DATA, 'precios-multi', 'latest.json'));
   const activos = activosMencionados(mensaje);
 
@@ -73,20 +82,21 @@ async function buildContext(mensaje = '') {
     const h15m = leerHistoricoMulti(simbolo, '15m');
     if (h1D || h1H || h15m) {
       bloqueMulti.push(
-        `-- ${simbolo} --\n` +
-        (h1D  ? `Historico 1D:\n${h1D}\n`  : '') +
-        (h1H  ? `Historico 1H:\n${h1H}\n`  : '') +
-        (h15m ? `Historico 15m:\n${h15m}\n` : '')
+        `── ${simbolo} ──\n` +
+        (h1D  ? `Histórico 1D:\n${h1D}\n`  : '') +
+        (h1H  ? `Histórico 1H:\n${h1H}\n`  : '') +
+        (h15m ? `Histórico 15m:\n${h15m}\n` : '')
       );
     }
   }
 
   return [
+    `Fecha y hora actual en España: ${horaEspana}`,
     `Precio crypto actual: ${precio ? JSON.stringify(precio) : 'sin datos'}`,
     `Noticias recientes: ${noticias ? JSON.stringify(noticias) : 'sin datos'}`,
-    `Historico crypto 1D:\n${csv1D  || 'sin datos'}`,
-    `Historico crypto 1H:\n${csv1H  || 'sin datos'}`,
-    `Historico crypto 15m:\n${csv15m || 'sin datos'}`,
+    `Histórico crypto 1D:\n${csv1D  || 'sin datos'}`,
+    `Histórico crypto 1H:\n${csv1H  || 'sin datos'}`,
+    `Histórico crypto 15m:\n${csv15m || 'sin datos'}`,
     ...(bloqueMulti.length > 0 ? bloqueMulti : ['Datos forex/acciones: sin datos (configura TWELVE_DATA_API_KEY)']),
   ].join('\n\n');
 }
