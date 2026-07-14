@@ -13,7 +13,7 @@ const systemPrompt = fs.readFileSync(path.join(__dirname, 'system-prompt.md'), '
  */
 async function askClaude({ message, image, context, history = [] }) {
   // Mensajes anteriores de la conversación (sin contexto de mercado, solo el texto)
-  const messages = history.slice(-20).map(m => ({
+  const messages = history.slice(-10).map(m => ({
     role: m.role,
     content: m.content
   }));
@@ -41,8 +41,8 @@ async function askClaude({ message, image, context, history = [] }) {
   messages.push({ role: 'user', content: currentContent });
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 1024,
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 768,
     system: systemPrompt,
     messages,
   });
@@ -59,7 +59,7 @@ async function askClaude({ message, image, context, history = [] }) {
  * Devuelve un Stream de Anthropic con .textStream iterable.
  */
 function askClaudeStream({ message, image, context, history = [] }) {
-  const messages = history.slice(-20).map(m => ({
+  const messages = history.slice(-10).map(m => ({
     role: m.role,
     content: m.content
   }));
@@ -84,8 +84,8 @@ function askClaudeStream({ message, image, context, history = [] }) {
   messages.push({ role: 'user', content: currentContent });
 
   return anthropic.messages.stream({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 1024,
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 768,
     system: systemPrompt,
     messages,
   });
