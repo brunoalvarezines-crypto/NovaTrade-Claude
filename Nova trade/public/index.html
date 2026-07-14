@@ -432,6 +432,70 @@
     40% { transform:translateY(-5px); opacity:0.9; }
   }
 
+  /* ── DRAG & DROP OVERLAY ── */
+  #drop-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(8,12,10,0.88);
+    backdrop-filter: blur(6px);
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px;
+    pointer-events: none;
+  }
+  #drop-overlay.active { display: flex; pointer-events: all; }
+  .drop-zone {
+    border: 2px dashed var(--logo-green);
+    border-radius: 24px;
+    width: min(480px, 90vw); height: min(280px, 50vh);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+    color: var(--logo-green);
+    transition: background 0.15s;
+  }
+  #drop-overlay.over .drop-zone { background: rgba(74,158,122,0.08); }
+  .drop-zone svg { opacity: 0.7; }
+  .drop-zone-text { font-size: 15px; font-weight: 500; color: var(--text); opacity: 0.9; }
+  .drop-zone-sub  { font-size: 12px; color: var(--text2); }
+
+  /* ── LIGHTBOX ── */
+  #lightbox {
+    display: none;
+    position: fixed; inset: 0; z-index: 3000;
+    background: rgba(0,0,0,0.92);
+    backdrop-filter: blur(8px);
+    align-items: center; justify-content: center;
+  }
+  #lightbox.active { display: flex; }
+  #lightbox-img {
+    max-width: 88vw; max-height: 88vh;
+    border-radius: 12px;
+    object-fit: contain;
+    transform-origin: center;
+    transition: transform 0.15s;
+    user-select: none;
+  }
+  #lightbox-close {
+    position: fixed; top: 18px; right: 22px;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); border: none;
+    color: #fff; font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  #lightbox-close:hover { background: rgba(255,255,255,0.22); }
+  #lightbox-zoom {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px;
+  }
+  .lbz-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); border: none;
+    color: #fff; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .lbz-btn:hover { background: rgba(255,255,255,0.22); }
+
   /* ── STREAMING ── */
   .streaming-wrap { position: relative; width: 100%; }
   .streaming-fade {
@@ -869,6 +933,29 @@
 
   <!-- Input file oculto para adjuntar archivos -->
   <input type="file" id="file-input" accept="image/*,.pdf,.txt,.csv,.xlsx,.docx" style="display:none" onchange="onFileSelected(event)"/>
+
+  <!-- Drag & drop overlay -->
+  <div id="drop-overlay">
+    <div class="drop-zone">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <div class="drop-zone-text">Suelta el archivo aquí</div>
+      <div class="drop-zone-sub">imagen, pdf, txt, csv…</div>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" onclick="closeLightbox(event)">
+    <img id="lightbox-img" src="" alt=""/>
+    <button id="lightbox-close" onclick="closeLightbox()">×</button>
+    <div id="lightbox-zoom">
+      <button class="lbz-btn" onclick="zoomLightbox(-0.25)" title="Alejar">−</button>
+      <button class="lbz-btn" onclick="zoomLightbox(0.25)"  title="Acercar">+</button>
+    </div>
+  </div>
 
 </div>
 
@@ -1387,7 +1474,7 @@
       const isImg = /^image\//.test(file.type);
       if (isImg) {
         const url = URL.createObjectURL(file);
-        mediaTag = `<img src="${url}" class="user-img-thumb" alt="imagen adjunta"/>`;
+        mediaTag = `<img src="${url}" class="user-img-thumb" alt="imagen adjunta" onclick="openLightbox(this)" style="cursor:zoom-in"/>`;
       } else {
         mediaTag = `<div class="user-file-chip">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -1821,6 +1908,101 @@
     });
   }
 
+
+  // ── DRAG & DROP ──
+  (function() {
+    let dragCounter = 0;
+    const overlay = document.getElementById('drop-overlay');
+
+    function showOverlay() { overlay.classList.add('active'); }
+    function hideOverlay() { overlay.classList.remove('active', 'over'); dragCounter = 0; }
+
+    window.addEventListener('dragenter', e => {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      dragCounter++;
+      showOverlay();
+    });
+    window.addEventListener('dragleave', e => {
+      dragCounter--;
+      if (dragCounter <= 0) hideOverlay();
+    });
+    window.addEventListener('dragover', e => {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      e.preventDefault();
+      overlay.classList.add('over');
+    });
+    window.addEventListener('drop', e => {
+      e.preventDefault();
+      hideOverlay();
+      const file = e.dataTransfer?.files?.[0];
+      if (file) loadDroppedFile(file);
+    });
+    overlay.addEventListener('dragleave', e => { if (!overlay.contains(e.relatedTarget)) hideOverlay(); });
+    overlay.addEventListener('drop', e => {
+      e.preventDefault(); e.stopPropagation();
+      hideOverlay();
+      const file = e.dataTransfer?.files?.[0];
+      if (file) loadDroppedFile(file);
+    });
+  })();
+
+  function loadDroppedFile(file) {
+    selectedFile = file;
+    document.getElementById('file-name').textContent = file.name;
+    document.getElementById('file-preview').style.display = 'flex';
+    const thumb = document.getElementById('file-preview-thumb');
+    const icon = document.getElementById('file-preview-icon');
+    if (/^image\//.test(file.type)) {
+      thumb.src = URL.createObjectURL(file);
+      thumb.style.display = 'block';
+      icon.style.display = 'none';
+    } else {
+      thumb.style.display = 'none';
+      icon.style.display = 'block';
+    }
+    document.querySelector('.pill-plus').style.color = 'var(--logo-green)';
+    refreshActionMode();
+    document.getElementById('chat-input').focus();
+  }
+
+  // ── LIGHTBOX ──
+  let lbScale = 1;
+
+  function openLightbox(imgEl) {
+    const lb = document.getElementById('lightbox');
+    const lbImg = document.getElementById('lightbox-img');
+    lbImg.src = imgEl.src;
+    lbScale = 1;
+    lbImg.style.transform = 'scale(1)';
+    lb.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox(e) {
+    if (e && e.target !== document.getElementById('lightbox') && e.target !== document.getElementById('lightbox-close')) return;
+    document.getElementById('lightbox').classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  function zoomLightbox(delta) {
+    lbScale = Math.min(4, Math.max(0.5, lbScale + delta));
+    document.getElementById('lightbox-img').style.transform = `scale(${lbScale})`;
+  }
+
+  // Zoom con rueda del ratón en lightbox
+  document.getElementById('lightbox').addEventListener('wheel', e => {
+    if (!document.getElementById('lightbox').classList.contains('active')) return;
+    e.preventDefault();
+    zoomLightbox(e.deltaY < 0 ? 0.15 : -0.15);
+  }, { passive: false });
+
+  // Cerrar lightbox con Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('lightbox').classList.contains('active')) {
+      document.getElementById('lightbox').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  });
 
   function renderMd(text) {
     var escaped = text
