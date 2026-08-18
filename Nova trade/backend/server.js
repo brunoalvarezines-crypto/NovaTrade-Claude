@@ -3,7 +3,7 @@ const express = require('express');
 const path = require('path');
 
 const { ensureDataDirs } = require('./ensure-data-dirs');
-const { askClaude, askClaudeStream, anthropic } = require('./claude-client');
+const { askClaude, askClaudeStream, generateTitle } = require('./claude-client');
 const { buildContext } = require('./context');
 const { startPriceFeed } = require('./feeds/precio');
 const { startNewsFeed } = require('./feeds/noticias');
@@ -33,13 +33,7 @@ app.post('/api/title', async (req, res) => {
   try {
     const { message } = req.body || {};
     if (!message) return res.status(400).json({ error: 'Falta message' });
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 20,
-      system: 'Genera un título corto (3-5 palabras, sin puntuación, sin comillas) que resuma esta pregunta de trading. Solo el título, nada más.',
-      messages: [{ role: 'user', content: message }]
-    });
-    const title = response.content[0].text.trim().replace(/^["'«»]|["'«»]$/g, '');
+    const title = await generateTitle(message);
     res.json({ title });
   } catch (err) {
     res.status(500).json({ error: 'Error generando título' });
@@ -64,14 +58,12 @@ app.post('/chat', async (req, res) => {
     // Desactiva Nagle: cada write() sale por TCP inmediatamente sin esperar
     req.socket?.setNoDelay(true);
 
-    const stream = askClaudeStream({ message, image, context, history: history || [] });
+    const stream = await askClaudeStream({ message, image, context, history: history || [] });
 
-    // Mandar cada delta de texto al cliente (compatible con todas las versiones del SDK)
-    for await (const event of stream) {
+    for await (const chunk of stream) {
       if (res.writableEnded) break;
-      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-        res.write(`data: ${JSON.stringify({ token: event.delta.text })}\n\n`);
-      }
+      const text = chunk.text();
+      if (text) res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
     }
 
     if (!res.writableEnded) {
