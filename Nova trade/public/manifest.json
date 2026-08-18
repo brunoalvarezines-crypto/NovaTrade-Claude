@@ -1,6 +1,6 @@
 {
-  "name": "NovaTrade",
-  "short_name": "NovaTrade",
+  "name": "Dex",
+  "short_name": "Dex",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
