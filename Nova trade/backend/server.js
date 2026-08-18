@@ -62,8 +62,12 @@ app.post('/chat', async (req, res) => {
 
     for await (const chunk of stream) {
       if (res.writableEnded) break;
-      const text = chunk.text();
-      if (text) res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
+      try {
+        const text = chunk.text();
+        if (text) res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
+      } catch (_) {
+        // chunk sin texto (safety ratings, etc.) — ignorar
+      }
     }
 
     if (!res.writableEnded) {
