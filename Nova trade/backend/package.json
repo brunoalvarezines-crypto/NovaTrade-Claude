@@ -2,7 +2,7 @@
   "name": "novatrade-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Backend de NovaTrade: sirve la app (PWA) y expone /chat con Claude.",
+  "description": "Backend de Dex: sirve la app (PWA) y expone /chat con Claude.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

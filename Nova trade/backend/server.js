@@ -90,7 +90,7 @@ app.post('/chat', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`NovaTrade backend escuchando en puerto ${PORT}`);
+  console.log(`Dex backend escuchando en puerto ${PORT}`);
   startPriceFeed();
   startNewsFeed();
   startHistoricosFeed();
