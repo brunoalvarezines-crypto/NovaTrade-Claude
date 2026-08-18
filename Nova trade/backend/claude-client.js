@@ -1,69 +1,86 @@
-const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 const fs = require('fs');
 const path = require('path');
+const Anthropic = require('@anthropic-ai/sdk');
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const systemPrompt = fs.readFileSync(path.join(__dirname, 'system-prompt.md'), 'utf-8');
 
-const MODEL = 'gemini-3.6-flash';
+/**
+ * Llama a Claude con el mensaje del usuario + el contexto de mercado actual.
+ */
+async function askClaude({ message, image, context, history = [] }) {
+  const messages = history.slice(-10).map(m => ({
+    role: m.role,
+    content: m.content
+  }));
 
-// Desactivar filtros de seguridad para contenido financiero
-const safetySettings = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT,        threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,       threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-];
-
-function buildContents(history, message, image, context) {
-  const contents = history.slice(-10).map(m => {
-    const text = typeof m.content === 'string'
-      ? m.content
-      : (m.content.find(c => c.type === 'text')?.text || '');
-    return {
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text }]
-    };
-  });
-
-  if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
-    contents.pop();
+  if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+    messages.pop();
   }
 
-  const parts = [];
+  const currentContent = [];
   if (image) {
     const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(image);
     if (match) {
-      parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+      const [, mediaType, data] = match;
+      currentContent.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
     }
   }
-  parts.push({ text: `${message || ''}\n\n--- Contexto de mercado actual ---\n${context}`.trim() });
-  contents.push({ role: 'user', parts });
-
-  return contents;
-}
-
-async function askClaude({ message, image, context, history = [] }) {
-  const model = genAI.getGenerativeModel({ model: MODEL, systemInstruction: systemPrompt, safetySettings });
-  const contents = buildContents(history, message, image, context);
-  const result = await model.generateContent({ contents, generationConfig: { maxOutputTokens: 768 } });
-  return result.response.text();
-}
-
-async function askClaudeStream({ message, image, context, history = [] }) {
-  const model = genAI.getGenerativeModel({ model: MODEL, systemInstruction: systemPrompt, safetySettings });
-  const contents = buildContents(history, message, image, context);
-  const result = await model.generateContentStream({ contents, generationConfig: { maxOutputTokens: 768 } });
-  return result.stream;
-}
-
-async function generateTitle(message) {
-  const model = genAI.getGenerativeModel({
-    model: MODEL,
-    systemInstruction: 'Genera un título corto (3-5 palabras, sin puntuación, sin comillas) que resuma esta pregunta de trading. Solo el título, nada más.'
+  currentContent.push({
+    type: 'text',
+    text: `${message || ''}\n\n--- Contexto de mercado actual ---\n${context}`.trim(),
   });
-  const result = await model.generateContent(message);
-  return result.response.text().trim().replace(/^["'«»]|["'«»]$/g, '');
+
+  messages.push({ role: 'user', content: currentContent });
+
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 768,
+    system: systemPrompt,
+    messages,
+  });
+
+  return response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim();
 }
 
-module.exports = { askClaude, askClaudeStream, generateTitle };
+/**
+ * Versión streaming de askClaude.
+ */
+function askClaudeStream({ message, image, context, history = [] }) {
+  const messages = history.slice(-10).map(m => ({
+    role: m.role,
+    content: m.content
+  }));
+
+  if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+    messages.pop();
+  }
+
+  const currentContent = [];
+  if (image) {
+    const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(image);
+    if (match) {
+      const [, mediaType, data] = match;
+      currentContent.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
+    }
+  }
+  currentContent.push({
+    type: 'text',
+    text: `${message || ''}\n\n--- Contexto de mercado actual ---\n${context}`.trim(),
+  });
+
+  messages.push({ role: 'user', content: currentContent });
+
+  return anthropic.messages.stream({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 768,
+    system: systemPrompt,
+    messages,
+  });
+}
+
+module.exports = { askClaude, askClaudeStream, anthropic };
