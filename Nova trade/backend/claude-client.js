@@ -5,15 +5,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const systemPrompt = fs.readFileSync(path.join(__dirname, 'system-prompt.md'), 'utf-8');
 
-// El system prompt se marca como cacheable — Anthropic lo almacena 5 minutos
-// y las llamadas siguientes pagan solo el 10% de esos tokens.
-const systemWithCache = [
-  {
-    type: 'text',
-    text: systemPrompt,
-    cache_control: { type: 'ephemeral' },
-  },
-];
+const systemWithCache = systemPrompt;
 
 function buildMessages(history, message, image, context) {
   const messages = history.slice(-10).map(m => ({
@@ -40,7 +32,6 @@ function buildMessages(history, message, image, context) {
   currentContent.push({
     type: 'text',
     text: `${message || ''}\n\n--- Contexto de mercado actual ---\n${context}`.trim(),
-    cache_control: { type: 'ephemeral' },
   });
 
   messages.push({ role: 'user', content: currentContent });
@@ -54,7 +45,6 @@ async function askClaude({ message, image, context, history = [] }) {
     max_tokens: 768,
     system: systemWithCache,
     messages,
-    betas: ['prompt-caching-2024-07-31'],
   });
   return response.content
     .filter(b => b.type === 'text')
@@ -70,7 +60,6 @@ function askClaudeStream({ message, image, context, history = [] }) {
     max_tokens: 768,
     system: systemWithCache,
     messages,
-    betas: ['prompt-caching-2024-07-31'],
   });
 }
 
