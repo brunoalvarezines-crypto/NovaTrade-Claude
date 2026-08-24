@@ -1,10 +1,42 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
+const webpush = require('web-push');
 
 const { ensureDataDirs } = require('./ensure-data-dirs');
 const { askClaude, askClaudeStream, anthropic } = require('./claude-client');
 const { buildContext } = require('./context');
+
+// ── Web Push: claves VAPID ──
+webpush.setVapidDetails(
+  'mailto:somosboto@gmail.com',
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
+);
+
+// ── Suscripciones en archivo (se reconstruyen al abrir la app) ──
+const SUBS_FILE = path.join(__dirname, 'data', 'subscriptions.json');
+function loadSubs() {
+  try { return JSON.parse(fs.readFileSync(SUBS_FILE, 'utf-8')); } catch { return []; }
+}
+function saveSubs(subs) {
+  fs.writeFileSync(SUBS_FILE, JSON.stringify(subs));
+}
+function addSub(sub) {
+  const subs = loadSubs();
+  const endpoint = sub.endpoint;
+  if (!subs.find(s => s.endpoint === endpoint)) { subs.push(sub); saveSubs(subs); }
+}
+async function sendPushToAll(payload) {
+  const subs = loadSubs();
+  const valid = [];
+  for (const sub of subs) {
+    try { await webpush.sendNotification(sub, JSON.stringify(payload)); valid.push(sub); }
+    catch (e) { if (e.statusCode !== 410 && e.statusCode !== 404) valid.push(sub); }
+  }
+  saveSubs(valid);
+}
 const { startPriceFeed } = require('./feeds/precio');
 const { startNewsFeed } = require('./feeds/noticias');
 const { startHistoricosFeed } = require('./feeds/historicos');
@@ -43,6 +75,69 @@ app.post('/api/title', async (req, res) => {
     res.json({ title });
   } catch (err) {
     res.status(500).json({ error: 'Error generando título' });
+  }
+});
+
+// ── PUSH: clave pública VAPID para el frontend ──
+app.get('/api/push/vapid-public-key', (req, res) => {
+  res.json({ key: process.env.VAPID_PUBLIC_KEY });
+});
+
+// ── PUSH: guardar suscripción del dispositivo ──
+app.post('/api/push/subscribe', (req, res) => {
+  const { subscription } = req.body || {};
+  if (!subscription?.endpoint) return res.status(400).json({ error: 'Falta subscription' });
+  addSub(subscription);
+  res.json({ ok: true });
+});
+
+// ── ANÁLISIS AUTOMÁTICO: llamado por cron-job.org cada 30 min ──
+app.post('/api/analyze', async (req, res) => {
+  // Protección simple con token secreto
+  const token = req.headers['x-cron-token'];
+  if (token !== process.env.CRON_SECRET) return res.status(401).json({ error: 'No autorizado' });
+
+  try {
+    const context = await buildContext('analisis general todos los activos');
+    const prompt = `Analiza TODOS los activos disponibles ahora mismo y clasifica el mejor en uno de estos 3 niveles. Responde SOLO con el nivel y el activo, en este formato exacto:
+
+NIVEL1|ACTIVO|texto breve natural (max 8 palabras) explicando por qué es operable
+NIVEL2|ACTIVO|texto breve natural (max 8 palabras) explicando el setup
+NIVEL3|ACTIVO|texto breve natural (max 8 palabras) explicando por qué es excepcional
+SIN_ALERTA
+
+Criterios:
+- NIVEL1: el mercado tiene estructura legible, tendencia definida, se puede practicar trading. Umbral bajo — basta con que haya algo claro.
+- NIVEL2: hay un setup concreto con entrada, SL y TP identificables. Umbral medio.
+- NIVEL3: confluencias múltiples excepcionales, ocurre 1-2 veces al mes. Umbral muy alto.
+
+Elige el nivel más alto que se cumpla. Si no hay nada mínimamente operable, responde: SIN_ALERTA`;
+
+    const respuesta = await askClaude({ message: prompt, context, history: [] });
+    const linea = respuesta.trim();
+
+    if (!linea || linea === 'SIN_ALERTA') {
+      return res.json({ sent: false, reason: 'Sin alerta' });
+    }
+
+    const partes = linea.split('|');
+    if (partes.length < 3) return res.json({ sent: false, reason: 'Formato inesperado' });
+
+    const [nivel, activo, texto] = partes;
+
+    const titulos = {
+      NIVEL1: `${activo} tiene buena estructura`,
+      NIVEL2: `Buen setup en ${activo}`,
+      NIVEL3: `⚡ Setup excepcional en ${activo}`,
+    };
+
+    const titulo = titulos[nivel.trim()] || `Alerta en ${activo}`;
+
+    await sendPushToAll({ title: titulo, body: texto.trim(), url: '/' });
+    res.json({ sent: true, nivel, activo, message: texto.trim() });
+  } catch (err) {
+    console.error('Error en /api/analyze:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
