@@ -9,11 +9,15 @@ const { askClaude, askClaudeStream, anthropic } = require('./claude-client');
 const { buildContext } = require('./context');
 
 // ── Web Push: claves VAPID ──
-webpush.setVapidDetails(
-  'mailto:somosboto@gmail.com',
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:somosboto@gmail.com',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+} else {
+  console.warn('VAPID keys no configuradas — notificaciones push desactivadas');
+}
 
 // ── Suscripciones en archivo (se reconstruyen al abrir la app) ──
 const SUBS_FILE = path.join(__dirname, 'data', 'subscriptions.json');
