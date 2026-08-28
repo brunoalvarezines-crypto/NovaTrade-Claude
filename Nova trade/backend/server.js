@@ -95,6 +95,16 @@ app.post('/api/push/subscribe', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── TEST DE PUSH (temporal) ──
+app.get('/api/push/test', async (req, res) => {
+  try {
+    await sendPushToAll({ title: '👋 Hola desde Dex', body: 'Las notificaciones están funcionando.', url: '/' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── ANÁLISIS AUTOMÁTICO: llamado por cron-job.org cada 30 min ──
 app.post('/api/analyze', async (req, res) => {
   // Protección simple con token secreto
