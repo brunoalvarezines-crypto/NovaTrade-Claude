@@ -1768,7 +1768,9 @@
         applicationServerKey: urlBase64ToUint8Array(key)
       });
       await sendSubscriptionToServer(sub);
-    } catch (e) { /* permisos denegados o no soportado */ }
+    } catch (e) {
+      fetch('/api/push/error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: e?.message || String(e) }) }).catch(() => {});
+    }
   }
 
   async function sendSubscriptionToServer(sub) {
